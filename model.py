@@ -9,6 +9,17 @@ from wenet.transformer.embeddding import RopePositionalEncoding
 from wenet.transformer.positionwise_feed_forward import GatedVariantsMLP
 
 
+def add_noise(
+    original_samples: torch.Tensor,
+    noise: torch.Tensor,
+    timesteps: torch.Tensor,
+) -> torch.Tensor:
+
+    t = timesteps[:, None, None]
+    noisy_samples = t * noise + (1 - t) * original_samples
+    return noisy_samples
+
+
 class TimestepEmbedding(nn.Module):
 
     def __init__(self, in_size, embedding_dim):
