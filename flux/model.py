@@ -3,10 +3,11 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from wene.transformer.norm import RMSNorm
 from wenet.transformer.attention import RopeMultiHeadedAttention
-from wenet.transformer.embeddding import RopePositionalEncoding
+from wenet.transformer.embedding import RopePositionalEncoding
+from wenet.transformer.norm import RMSNorm
 from wenet.transformer.positionwise_feed_forward import GatedVariantsMLP
+from wenet.utils.mask import make_non_pad_mask
 
 
 def add_noise(
@@ -166,7 +167,7 @@ class FluxSingleTransformerBlock(nn.Module):
         return hidden_states
 
 
-class AudioTransformer2DModel(torch.nn.Module):
+class DITModel(torch.nn.Module):
 
     def __init__(self, config) -> None:
         super().__init__()
@@ -188,6 +189,10 @@ class AudioTransformer2DModel(torch.nn.Module):
             config.output_size)
 
         self.lin = torch.nn.Linear(config.n_mels, config.output_size)
+
+        self.pos_emb = RopePositionalEncoding(config.output_size,
+                                              config.head_dim, 0.0, 10000,
+                                              10000.0, False)
 
     def timestep_embedding(self,
                            t: torch.Tensor,
@@ -234,21 +239,30 @@ class AudioTransformer2DModel(torch.nn.Module):
         """forward for training
         """
         speech_tokens = batch['speech_tokens']
-        speech_tokens_lens = batch['speech_tokens_lens']
         speech_embeds = self.speech_token_embed(speech_tokens)
 
         mels = batch['mel']
         mels_lens = batch['mels_lens']
 
+        mask = make_non_pad_mask(mels_lens)
+
         timestep = batch['timestep']
         timestep = self.timestep_embedding(timestep, 256)  # [B, T]
 
-        temb = self.time_speech_embed(timestep)
-        hiden_states = self.lin(mels)
+        temb = self.time_speech_embed(timestep, speech_embeds)
+        hidden_states = self.lin(mels)
 
-        # TODO: cfg or soundstorm mask
-        hidden_states = temb + hiden_states
+        hidden_states = temb + hidden_states
         # TODO: checkpointing
+        hidden_states, pos_emb = self.pos_emb(hidden_states)
         for layer in self.blocks:
-            hidden_states = layer(hidden_states, temb)
-        return hidden_states
+            hidden_states = layer(hidden_states, temb, mask, pos_emb)
+        return hidden_states, mask
+
+
+if __name__ == '__main__':
+    from configs.default import get_config
+
+    config = get_config()
+    model = DITModel(config)
+    print(model)
