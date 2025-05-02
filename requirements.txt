@@ -1,0 +1,3 @@
+git+https://github.com/wenet-e2e/wenet.git
+ml_collections
+git+https://github.com/Mddct/transformer-vocos.git
