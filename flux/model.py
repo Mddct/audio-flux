@@ -279,4 +279,4 @@ if __name__ == '__main__':
     )
     sample_t = timesteps[t]
 
-    print(model(speech_token, mels, mels_lens, t))
+    print(sample_t, model(speech_token, mels, mels_lens, t))
