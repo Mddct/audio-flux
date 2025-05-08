@@ -117,11 +117,14 @@ class TrainState:
         log_str = f'[RANK {self.rank}] step_{self.step+1}: '
 
         loss_mean.backward()
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                                   self.config.clip_grad_norm)
         self.opt.step()
         self.opt.zero_grad()
         self.scheduler.step()
         if self.rank == 0:
             self.writer.add_scalar("train/mel_loss", loss_mean, self.step)
+            self.writer.add_scalar("train/grad_norm", grad_norm, self.step)
 
         log_str += f"loss: {loss_mean}"
 

@@ -51,6 +51,7 @@ def get_config():
     config.mel_scale = 'slaney'
     config.padding = "center"
     config.multiscale_mel_loss = True
+    config.clip_grad_norm = 1
 
     config.speech_vocab_size = 8000
     # model
