@@ -4,6 +4,7 @@ from functools import partial
 
 import torch
 import torch.distributed as dist
+from torch.optim.lr_scheduler import LambdaLR
 
 
 def init_distributed(configs):

@@ -1,7 +1,7 @@
 from absl import app, flags
 from ml_collections import config_flags
 
-from flux.train_utils import TrainsState
+from flux.train_utils import TrainState
 
 FLAGS = flags.FLAGS
 
@@ -14,7 +14,7 @@ def main(_):
     assert config.model_dir != ''
     assert config.tensorboard_dir != ''
     assert config.train_data != ''
-    state = TrainsState(config)
+    state = TrainState(config)
     state.train()
 
 
