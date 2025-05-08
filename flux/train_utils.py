@@ -6,10 +6,24 @@ import torch.optim as optim
 import torchaudio
 from absl import logging
 from torch.utils.tensorboard import SummaryWriter
+from wenet.utils.mask import make_non_pad_mask
 
 from flux.dataset import init_dataset_and_dataloader
 from flux.utils import get_cosine_schedule_with_warmup, init_distributed
 from model import DITModel, add_noise
+
+
+def samples_sequence_mask(seq_lens, max_lens):
+    B = seq_lens.shape[0]
+    random_floats = torch.rand(B)  # Shape [B,]
+    scaled_random_floats = random_floats * seq_lens.float()
+    s = torch.floor(scaled_random_floats).to(torch.int64)
+    time_indices = torch.arange(max_lens, dtype=s.dtype)  # Shape [T,]
+
+    s_expanded = s.unsqueeze(1)  # Shape [B, 1]
+
+    mask = s_expanded < time_indices  # Shape [B, T], dtype=torch.bool
+    return mask
 
 
 class TrainState:
@@ -30,11 +44,6 @@ class TrainState:
         self.sample_rate = config.sample_rate
         self.learning_rate = config.learning_rate
         self.warmup_steps = config.warmup_steps
-        self.mel_loss_coeff = config.mel_loss_coeff
-        self.base_mel_coeff = config.mel_loss_coeff
-        self.mrd_loss_coeff = config.mrd_loss_coeff
-        self.pretrain_mel_steps = config.pretrain_mel_steps
-        self.decay_mel_coeff = config.decay_mel_coeff
 
         self.max_steps = config.max_train_steps
 
@@ -91,6 +100,12 @@ class TrainState:
         noise = torch.randn(mels.shape, dtype=mels.dtype)
         noise_mels = add_noise(mels, noise, self.timesteps[timesteps])
         # TODO: mels prompt mask
+        # NOTE(Mddct):
+        #     1 condition tokens never  mask
+        #     2 mel nver mask before t
+        t_mask = samples_sequence_mask(mels_lens, mels_lens.max())
+        noise_mels = torch.where(t_mask.unsqueeze(-1), mels, noise_mels)
+
         model_pred, mask = self.model(speech_tokens, noise_mels, mels_lens,
                                       timesteps)
         target = noise - mels
@@ -102,11 +117,14 @@ class TrainState:
         log_str = f'[RANK {self.rank}] step_{self.step+1}: '
 
         loss_mean.backward()
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                                   self.config.clip_grad_norm)
         self.opt.step()
         self.opt.zero_grad()
         self.scheduler.step()
         if self.rank == 0:
             self.writer.add_scalar("train/mel_loss", loss_mean, self.step)
+            self.writer.add_scalar("train/grad_norm", grad_norm, self.step)
 
         log_str += f"loss: {loss_mean}"
 
@@ -130,6 +148,7 @@ class TrainState:
     def save(self):
         if self.rank == 0:
             checkpoint_dir = os.path.join(self.config.model_dir,
+                                          self.config.run_name,
                                           f'step_{self.step}')
             os.makedirs(checkpoint_dir, exist_ok=True)
 
