@@ -55,7 +55,10 @@ def sort_by_feats(sample):
 
 def compute_mels(sample, mel_fn):
     wav = sample['wav']
-    mel = mel_fn(wav)  # [1, C, T]
+    padding = torch.zeros(1, wav.shape[1])
+    mel, out_padding = mel_fn(wav, padding)  # [1, C, T]
+    out_padding = 1 - out_padding.to(torch.int64)
+    mel = mel[:, :, :out_padding.sum(-1)[0]]
     mel = mel.transpose(1, 2)
     sample['mel'] = mel
     return sample
@@ -65,10 +68,14 @@ def padding(data, pad_value=0):
 
     double_token_lst = []
     mels_lst = []
-    for (token, mel) in zip(data['token'], data['mel']):
+
+    tokens = [sample['token'] for sample in data]
+    mels = [sample['mel'] for sample in data]
+    for (token, mel) in zip(tokens, mels):
         doubled_token = [x for item in token for x in (item, item)]
         min_len = min(len(doubled_token), mel.shape[1])
-        double_token_lst.append(doubled_token[:min_len])
+        double_token_lst.append(
+            torch.tensor(doubled_token[:min_len], dtype=torch.int64))
         mels_lst.append(mel[0][:min_len, :])
 
     mels_lens = [sample['mel'].shape[0] for sample in mels_lst]
@@ -115,6 +122,7 @@ def init_dataset_and_dataloader(files,
                                 sample_rate=24000,
                                 seed=2025,
                                 sort_buffer_size=1024,
+                                shuffle_size=2048,
                                 batch_type='static',
                                 split='train'):
 
@@ -122,6 +130,7 @@ def init_dataset_and_dataloader(files,
                                     cycle=steps,
                                     shuffle=shuffle,
                                     partition=True)
+    dataset = dataset.shuffle(buffer_size=shuffle_size)
     dataset = dataset.map(decode_wav)
     dataset = dataset.filter(filter_by_length)
     if split == 'train':

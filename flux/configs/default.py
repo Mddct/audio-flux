@@ -49,7 +49,7 @@ def get_config():
     config.fmax = None
     config.norm = 'slaney'
     config.mel_scale = 'slaney'
-    config.padding = "center"
+    config.padding = "same"
     config.multiscale_mel_loss = True
     config.clip_grad_norm = 1
 

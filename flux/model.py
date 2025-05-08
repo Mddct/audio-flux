@@ -195,6 +195,9 @@ class DITModel(torch.nn.Module):
                                               config.head_dim, 0.0, 10000,
                                               10000.0, False)
 
+        self.after_norm = RMSNorm(config.output_size, eps=1e-6)
+        self.out = torch.nn.Linear(config.output_size, config.n_mels)
+
     def timestep_embedding(self,
                            t: torch.Tensor,
                            dim: int,
@@ -247,6 +250,7 @@ class DITModel(torch.nn.Module):
         """
         speech_embeds = self.speech_token_embed(speech_tokens)
         mask = make_non_pad_mask(mels_lens)
+        mask = mask.unsqueeze(1)
         timesteps = self.timestep_embedding(timesteps,
                                             self.config.output_size)  # [B, T]
         temb = self.time_speech_embed(timesteps, speech_embeds)
@@ -257,7 +261,9 @@ class DITModel(torch.nn.Module):
         hidden_states, pos_emb = self.pos_emb(hidden_states)
         for layer in self.blocks:
             hidden_states = layer(hidden_states, temb, mask, pos_emb)
-        return hidden_states, mask
+
+        out = self.out(self.after_norm(hidden_states))
+        return out, mask
 
 
 if __name__ == '__main__':
