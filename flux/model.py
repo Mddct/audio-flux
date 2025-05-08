@@ -48,7 +48,7 @@ class CombinedTimestepSpeechTokenGuidanceEmbeddings(nn.Module):
     def forward(self, timestep, guidance):
         timestep_emb = self.timestep_embedding(timestep.to(
             guidance.dtype)).unsqueeze(1)  # [B,1,D]
-        guidance_emb = self.guidance_embedding(guidance.to(guidance.dtype))
+        guidance_emb = self.gudience_embedding(guidance.to(guidance.dtype))
         conditioning = timestep_emb + guidance_emb
 
         return conditioning
@@ -94,9 +94,9 @@ class AdaLayerNormZeroSingle(nn.Module):
     def forward(self, x, emb):
         # emb shape: (B, T, D)
         emb = F.gelu(emb)
-        emb = self.lin(emb)  # (B, 3*D)
+        emb = self.lin(emb)  # (B, T, 3*D)
         shift_msa, scale_msa, gate_msa = torch.chunk(emb, 3,
-                                                     dim=-1)  # Each: (B, D)
+                                                     dim=-1)  # Each: (B, T, D)
 
         if self.norm_type == "layer_norm":
             x = self.norm(x) * (1 + scale_msa) + shift_msa
@@ -153,15 +153,16 @@ class FluxSingleTransformerBlock(nn.Module):
     def forward(self, x, temb, mask, pos_emb):
         residual = x
 
-        norm_hidden_states, gate = self.norm(x, temb)  # (B, T, D)
+        norm_hidden_states, gate = self.norm1(x, temb)  # (B, T, D)
 
         x_att, _ = self.attn(norm_hidden_states, norm_hidden_states,
                              norm_hidden_states, mask, pos_emb)
 
-        hidden_states = residual + gate.unsqueeze(1) * x_att
+        hidden_states = residual + gate * x_att
         norm_hidden_states = self.norm2(hidden_states)
 
         hidden_states = self.mlp(norm_hidden_states) + norm_hidden_states
+
         if hidden_states.dtype == torch.float16:
             hidden_states = hidden_states.clip(-65504, 65504)
         return hidden_states
@@ -235,23 +236,22 @@ class DITModel(torch.nn.Module):
 
         return embedding
 
-    def forward(self, batch: dict):
+    def forward(
+        self,
+        speech_tokens: torch.Tensor,
+        mels: torch.Tensor,
+        mels_lens: torch.Tensor,
+        timesteps: torch.Tensor,
+    ):
         """forward for training
         """
-        speech_tokens = batch['speech_tokens']
         speech_embeds = self.speech_token_embed(speech_tokens)
-
-        mels = batch['mel']
-        mels_lens = batch['mels_lens']
-
         mask = make_non_pad_mask(mels_lens)
+        timesteps = self.timestep_embedding(timesteps,
+                                            self.config.output_size)  # [B, T]
+        temb = self.time_speech_embed(timesteps, speech_embeds)
 
-        timestep = batch['timestep']
-        timestep = self.timestep_embedding(timestep, 256)  # [B, T]
-
-        temb = self.time_speech_embed(timestep, speech_embeds)
         hidden_states = self.lin(mels)
-
         hidden_states = temb + hidden_states
         # TODO: checkpointing
         hidden_states, pos_emb = self.pos_emb(hidden_states)
@@ -265,4 +265,18 @@ if __name__ == '__main__':
 
     config = get_config()
     model = DITModel(config)
-    print(model)
+    seq_len = 100
+    speech_token = torch.arange(0, seq_len, dtype=torch.int64).unsqueeze(0)
+    mels = torch.randn(1, seq_len, config.n_mels)
+    mels_lens = torch.tensor([seq_len])
+
+    timesteps = torch.linspace(1, 0, steps=50 + 1)
+    t = torch.randint(
+        low=0,
+        high=len(timesteps) - 1,
+        size=(mels.shape[0], ),
+        device=mels.device,
+    )
+    sample_t = timesteps[t]
+
+    print(model(speech_token, mels, mels_lens, t))
