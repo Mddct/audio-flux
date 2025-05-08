@@ -59,9 +59,9 @@ def get_config():
     config.output_size = 256
     config.attention_heads = 4
     config.linear_units = 2048
-    config.num_blocks = 6
-    config.dropout_rate = 0.1
-    config.positional_dropout_rate = 0.1
+    config.num_blocks = 12
+    config.dropout_rate = 0.0
+    config.positional_dropout_rate = 0.0
     config.attention_dropout_rate = 0.0
     config.input_layer = 'linear'
     config.normalize_before = True
@@ -76,7 +76,7 @@ def get_config():
     config.n_kv_head = None
     config.head_dim = config.output_size // config.attention_heads
     config.selfattention_layer_type = "selfattn"
-    config.mlp_type = "position_wise_feed_forward"
+    config.mlp_type = "moe"
     config.mlp_bias = True
     config.n_expert = 8
     config.n_expert_activated = 2
