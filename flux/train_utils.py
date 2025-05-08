@@ -3,11 +3,9 @@ import os
 import torch
 import torch.distributed as dist
 import torch.optim as optim
-import torchaudio
 from absl import logging
 from torch.utils.tensorboard import SummaryWriter
 from vocos.utils import MelSpectrogram
-from wenet.utils.mask import make_non_pad_mask
 
 from flux.dataset import init_dataset_and_dataloader
 from flux.utils import get_cosine_schedule_with_warmup, init_distributed
@@ -55,10 +53,10 @@ class TrainState:
             n_fft=config.n_fft,
             hop_length=config.hop_size,
             n_mels=config.n_mels,
-            center=config.padding,
+            padding=config.padding,
             power=1.0,
-            f_min=0,
-            f_max=None,
+            fmin=0,
+            fmax=None,
             norm='slaney',
             mel_scale='slaney',
         )

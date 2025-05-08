@@ -57,7 +57,8 @@ def compute_mels(sample, mel_fn):
     wav = sample['wav']
     padding = torch.zeros(1, wav.shape[1])
     mel, out_padding = mel_fn(wav, padding)  # [1, C, T]
-    mel = mel[:, :, out_padding.sum(-1)[0]]
+    out_padding = 1 - out_padding.to(torch.int64)
+    mel = mel[:, :, :out_padding.sum(-1)[0]]
     mel = mel.transpose(1, 2)
     sample['mel'] = mel
     return sample
@@ -121,6 +122,7 @@ def init_dataset_and_dataloader(files,
                                 sample_rate=24000,
                                 seed=2025,
                                 sort_buffer_size=1024,
+                                shuffle_size=2048,
                                 batch_type='static',
                                 split='train'):
 
@@ -128,6 +130,7 @@ def init_dataset_and_dataloader(files,
                                     cycle=steps,
                                     shuffle=shuffle,
                                     partition=True)
+    dataset = dataset.shuffle(buffer_size=shuffle_size)
     dataset = dataset.map(decode_wav)
     dataset = dataset.filter(filter_by_length)
     if split == 'train':
