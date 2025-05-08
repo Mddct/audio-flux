@@ -110,8 +110,9 @@ class TrainState:
                                       timesteps)
         target = noise - mels
         loss = (target - model_pred)**2
-        masked_sum = (loss * mask.transpose(1, 2)).sum()
-        num_valid = mask.sum()
+        l_mask = mask.transpose(1, 2) * (1 - t_mask).unsqueeze(-1)
+        masked_sum = (loss * l_mask).sum()
+        num_valid = l_mask.sum()
         loss_mean = masked_sum / (num_valid + 1e-7)
 
         log_str = f'[RANK {self.rank}] step_{self.step+1}: '
