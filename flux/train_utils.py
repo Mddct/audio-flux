@@ -131,11 +131,11 @@ class TrainState:
             self.writer.add_scalar("train/grad_norm", grad_norm, self.step)
 
         opt_lrs = [group['lr'] for group in self.opt.param_groups]
-        log_str += f"loss: {loss_mean.item()}\tgrad_norm: {grad_norm.item()}\tlr: "
+        log_str += f"loss: {loss_mean.item()}\tgrad_norm: {grad_norm.item()}\t"
         for i, lr in enumerate(opt_lrs):
             if self.rank == 0:
                 self.writer.add_scalar('train/lr_{}'.format(i), lr, self.step)
-            log_str += f' lr_gen_{i} {lr:>6.5f}'
+            log_str += f' lr_{i}: {lr:>6.5f}'
 
         if (self.step + 1) % self.config.log_interval == 0:
             logging.info(log_str)
