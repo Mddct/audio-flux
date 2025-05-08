@@ -6,6 +6,7 @@ import torch.optim as optim
 import torchaudio
 from absl import logging
 from torch.utils.tensorboard import SummaryWriter
+from vocos.utils import MelSpectrogram
 from wenet.utils.mask import make_non_pad_mask
 
 from flux.dataset import init_dataset_and_dataloader
@@ -49,12 +50,12 @@ class TrainState:
 
         self.max_steps = config.max_train_steps
 
-        mel_fn = torchaudio.transforms.MelSpectrogram(
+        mel_fn = MelSpectrogram(
             sample_rate=config.sample_rate,
             n_fft=config.n_fft,
             hop_length=config.hop_size,
             n_mels=config.n_mels,
-            center=False,
+            center=config.padding,
             power=1.0,
             f_min=0,
             f_max=None,

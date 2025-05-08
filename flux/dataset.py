@@ -55,7 +55,9 @@ def sort_by_feats(sample):
 
 def compute_mels(sample, mel_fn):
     wav = sample['wav']
-    mel = mel_fn(wav)  # [1, C, T]
+    padding = torch.zeros(1, wav.shape[1])
+    mel, out_padding = mel_fn(wav, padding)  # [1, C, T]
+    mel = mel[:, :, out_padding.sum(-1)[0]]
     mel = mel.transpose(1, 2)
     sample['mel'] = mel
     return sample
