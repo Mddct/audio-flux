@@ -168,6 +168,10 @@ class TrainState:
             torch.save(meta, os.path.join(checkpoint_dir, 'model.pt'))
             opt_state_dict = self.opt.state_dict()
             torch.save(opt_state_dict, os.path.join(checkpoint_dir, 'opt.pt'))
+            scheduler_state_dict = self.scheduler.state_dict()
+            torch.save(scheduler_state_dict,
+                       os.path.join(checkpoint_dir, 'scheduler.pt'))
+
             logging.info(
                 f'[RANK {self.rank}] Checkpoint: save to checkpoint {checkpoint_dir}'
             )
@@ -187,9 +191,11 @@ class TrainState:
                           mmap=True)
         opt_disc.load_state_dict(ckpt)
 
+        ckpt = torch.load(os.path.join(checkpoint_dir, 'scheduler.pt'),
+                          map_location='cpu',
+                          mmap=True)
+        self.scheduler.load_state_dict(ckpt)
         logging.info(
             f'[RANK {self.rank}] Checkpoint: load  checkpoint {checkpoint_dir}'
         )
         dist.barrier()
-
-        self.scheduler.set_step(self.step)
