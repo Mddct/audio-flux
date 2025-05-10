@@ -252,7 +252,7 @@ class DITModel(torch.nn.Module):
         mask = make_non_pad_mask(mels_lens)
         mask = mask.unsqueeze(1)
         timesteps = self.timestep_embedding(timesteps,
-                                            self.config.output_size)  # [B, T]
+                                            self.config.output_size)  # [B, D]
         temb = self.time_speech_embed(timesteps, speech_embeds)
 
         hidden_states = self.lin(mels)
