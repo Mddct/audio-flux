@@ -114,7 +114,7 @@ class TrainState:
         l_mask = mask.transpose(1,
                                 2) * (1 - t_mask.to(torch.int64)).unsqueeze(-1)
         masked_sum = (loss * l_mask).sum()
-        num_valid = l_mask.sum()
+        num_valid = (l_mask.sum() * self.config.n_mels)
         loss_mean = masked_sum / (num_valid + 1e-7)
 
         loss_mean.backward()
