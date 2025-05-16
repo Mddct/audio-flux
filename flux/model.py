@@ -108,6 +108,59 @@ class AdaLayerNormZeroSingle(nn.Module):
         return x, gate_msa
 
 
+class AdaLayerNormZero(nn.Module):
+    """
+    Adaptive LayerNorm Zero (adaLN-Zero) module.
+
+    Args:
+        embedding_dim (int): The size of each embedding vector.
+        norm_type (str): Type of normalization to use. Currently only 'layer_norm' is supported.
+        bias (bool): Whether to include bias in the linear layer.
+        dtype (torch.dtype): Data type for parameters and computation.
+    """
+
+    def __init__(
+        self,
+        embedding_dim: int,
+        norm_type: str = "layer_norm",
+        bias: bool = True,
+    ):
+        super().__init__()
+        self.embedding_dim = embedding_dim
+        self.norm_type = norm_type
+        self.bias = bias
+
+        self.lin = nn.Linear(embedding_dim, 2 * embedding_dim, bias=bias)
+        self._init_weights(self.lin)
+
+        self.norm = nn.LayerNorm(embedding_dim,
+                                 elementwise_affine=False,
+                                 bias=False,
+                                 eps=1e-6)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            nn.init.kaiming_normal_(
+                module.weight, nonlinearity='linear')  # lecun_normal approx
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+
+    def forward(self, x, emb):
+        # emb shape: (B, T, D)
+        emb = F.gelu(emb)
+        emb = self.lin(emb)  # (B, T, 3*D)
+        shift_msa, scale_msa = torch.chunk(emb, 2, dim=-1)  # Each: (B, T, D)
+
+        if self.norm_type == "layer_norm":
+            x = self.norm(x) * (1 + scale_msa) + shift_msa
+        else:
+            raise ValueError(
+                f"Unsupported `norm_type` ({self.norm_type}) provided. Supported ones are: 'layer_norm'."
+            )
+
+        return x
+
+
 class FluxSingleTransformerBlock(nn.Module):
     """
     A Transformer block following the MMDiT architecture (Stable Diffusion 3).
@@ -195,7 +248,7 @@ class DITModel(torch.nn.Module):
                                               config.head_dim, 0.0, 10000,
                                               10000.0, False)
 
-        self.after_norm = RMSNorm(config.output_size, eps=1e-6)
+        self.after_norm = AdaLayerNormZero(config.output_size)
         self.out = torch.nn.Linear(config.output_size, config.n_mels)
 
     def timestep_embedding(self,
@@ -262,7 +315,7 @@ class DITModel(torch.nn.Module):
         for layer in self.blocks:
             hidden_states = layer(hidden_states, temb, mask, pos_emb)
 
-        out = self.out(self.after_norm(hidden_states))
+        out = self.out(self.after_norm(hidden_states, temb))
         return out, mask
 
 
